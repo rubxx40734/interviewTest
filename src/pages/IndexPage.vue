@@ -2,9 +2,9 @@
   <q-page class="row q-pt-xl">
     <div class="full-width q-px-xl">
       <div class="q-mb-xl">
-        <q-input v-model="tempData.name" label="姓名" />
-        <q-input v-model="tempData.age" label="年齡" />
-        <q-btn color="primary" class="q-mt-md">新增</q-btn>
+        <q-input v-model="tempData.name" :rules="[ val => !!val || '姓名必填']" label="姓名" />
+        <q-input v-model="tempData.age" :rules="[val => /^\d+$/.test(val) || '年齡必須是數字']"  label="年齡" />
+        <q-btn color="primary" class="q-mt-md" @click="addUser">新增</q-btn>
       </div>
 
       <q-table
@@ -79,19 +79,58 @@
 
 <script setup lang="ts">
 import axios from 'axios';
+import { useQuasar } from 'quasar'
+// import request from '../lib/request'
 import { QTableProps } from 'quasar';
 import { ref } from 'vue';
+
+const $q = useQuasar()
+const alert = (userData: UserData) => {
+  $q.dialog({
+    title: 'Alert',
+    message: '請輸入欲修改姓名',
+    prompt: {
+            model: '',
+            isValid: val => val.length > 0, // << here is the magic
+            type: 'text' // optional
+          },
+          cancel: true,
+          persistent: true
+  }).onOk(async (data) => {
+    const res = await axios.patch('https://dahua.metcfire.com.tw/api/CRUDTest', {
+      name: data,
+      age: userData.age,
+      id: userData.id
+    })
+    if(res.data) {
+      init()
+    }
+  })
+}
+
+const deleteModal = async (id: string) => {
+  $q.dialog({
+    title: '刪除',
+    message: '確認刪除嗎'
+  }).onOk(async () => {
+    const res = await axios.delete(`https://dahua.metcfire.com.tw/api/CRUDTest/${id}`)
+    if(res.data) {
+      init()
+    }
+  })
+}
+
 interface btnType {
   label: string;
   icon: string;
   status: string;
 }
-const blockData = ref([
-  {
-    name: 'test',
-    age: 25,
-  },
-]);
+interface UserData {
+  id: string;
+  name: string;
+  age: number;
+}
+const blockData = ref([]);
 const tableConfig = ref([
   {
     label: '姓名',
@@ -119,13 +158,57 @@ const tableButtons = ref([
   },
 ]);
 
+
 const tempData = ref({
   name: '',
   age: '',
 });
-function handleClickOption(btn, data) {
-  // ...
+async function init() {
+  const res = await axios.get('https://dahua.metcfire.com.tw/api/CRUDTest/a')
+  console.log(res)
+  blockData.value = res.data
 }
+init()
+function handleClickOption(btn: btnType, data: UserData) {
+  if(btn.status === 'edit') {
+    alert(data)
+  }
+  else {
+    deleteModal(data.id)
+  }
+}
+async function addUser() {
+  if(!tempData.value.name || !tempData.value.age) {
+    $q.dialog({
+      title: '錯誤',
+      message: '請填寫所有欄位',
+    });
+    return;
+  }
+  try {
+    const response = await axios.post('https://dahua.metcfire.com.tw/api/CRUDTest', {
+      name: tempData.value.name,
+      age: tempData.value.age
+    });
+
+    if(response.data) {
+      $q.dialog({
+        title: '成功',
+        message: '新增成功',
+      });
+      tempData.value.age = ''
+      tempData.value.name = ''
+      init()
+    }
+  } catch (error) {
+    console.error('Error during API request:', error);
+    $q.dialog({
+      title: '錯誤',
+      message: '請求失敗，請稍後再試',
+    });
+  }
+}
+
 </script>
 
 <style lang="scss" scoped>
